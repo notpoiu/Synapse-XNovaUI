@@ -12,6 +12,7 @@ namespace Synapse_Z
         public static string CurrentEditorHTML { get; set; } = "";
         public static bool noSave { get; set; } = false;
         public static bool injecting { get; set; } = false;
+        public static bool injected { get; set; } = false;
         public static bool isDone { get; set; } = false;
         private static bool autoInject;
         public static bool TabClosingPrompt { get; set; } = true;
@@ -19,7 +20,7 @@ namespace Synapse_Z
         public static bool UnlockFPS { get; set; } = false;
         public static string CurrentEditorTheme { get; set; } = "tomorrow_night_eighties";
         public static string CurrentKey { get; set; } = "";
-        public static string ExploitName { get; set; } = "Synapse Z";
+        public static string ExploitName { get; set; } = "Synapse X";
         public static bool ShowVersion { get; set; } = true;
 
         private static ObservableDictionary<string, bool> executionPIDS = new ObservableDictionary<string, bool>();

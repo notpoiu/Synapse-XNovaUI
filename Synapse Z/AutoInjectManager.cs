@@ -55,7 +55,7 @@ namespace Synapse_Z
                                 if (newProcessIds.Length > 0)
                                 {
                                     string launcherPath = paths.First();
-                                    form1Instance.Inject(launcherPath, true, newProcessIds);
+                                    form1Instance.Inject();
                                 }
                             }
                             else

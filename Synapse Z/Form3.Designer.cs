@@ -95,7 +95,7 @@
             this.synlabel.Name = "synlabel";
             this.synlabel.Size = new System.Drawing.Size(390, 31);
             this.synlabel.TabIndex = 1;
-            this.synlabel.Text = "Synapse Z - Script Hub";
+            this.synlabel.Text = "Synapse X - Script Hub";
             this.synlabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.synlabel.MouseDown += new System.Windows.Forms.MouseEventHandler(this.panel1_MouseDown);
             this.synlabel.MouseMove += new System.Windows.Forms.MouseEventHandler(this.panel1_MouseMove);

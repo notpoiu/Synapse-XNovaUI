@@ -17,6 +17,7 @@
     <ApplicationIcon>syn_GlE_icon.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
     <StartupObject>Synapse_Z.Program</StartupObject>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Resources\ace.js" />

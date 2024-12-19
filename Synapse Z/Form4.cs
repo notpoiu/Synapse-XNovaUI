@@ -26,7 +26,6 @@ namespace Synapse_Z
         private bool topBarMouseDown;
         private Point offset;
         private Timer fadeInTimer;
-        private ClientManager clientFormInstance;
 
         public Options()
         {
@@ -47,12 +46,9 @@ namespace Synapse_Z
             fadeInTimer.Start();
 
             ClearEditorPrompt.Checked = GlobalVariables.ClearEditorPrompt;
-            AutoInject.Checked = GlobalVariables.AutoInject;
             TopMostCheck.Checked = GlobalVariables.TopMostGlobal;
             TabClosingPrompt.Checked = GlobalVariables.TabClosingPrompt;
             UnlockFPS.Checked = GlobalVariables.UnlockFPS;
-
-            
 
             var editorThemes = ThemeManager.Instance.GetEditorThemes();
 
@@ -298,17 +294,6 @@ namespace Synapse_Z
             }
         }
 
-        private void EnterKey_Click(object sender, EventArgs e)
-        {
-            using (var promptForm = new AccountKeyPrompt())
-            {
-                if (promptForm.ShowDialog(this) == DialogResult.OK)
-                {
-                    MessageBox.Show("Successfully Set your current Key!", "Success!");
-                }
-            }
-        }
-
         private void GetCurrentKey_Click(object sender, EventArgs e)
         {
             if (GlobalVariables.CurrentKey != null & GlobalVariables.CurrentKey != "")
@@ -318,25 +303,6 @@ namespace Synapse_Z
             } else
             {
                 MessageBox.Show("No current key!", "Error!");
-            }
-        }
-
-        private void ClientManager_Click(object sender, EventArgs e)
-        {
-            if (clientFormInstance == null || clientFormInstance.IsDisposed)
-            {
-                // Create a new instance if it doesn't exist or is disposed
-                clientFormInstance = new ClientManager();
-
-
-                // Show the subform
-                clientFormInstance.Show();
-            }
-            else
-            {
-                // Bring the existing form to the front
-                clientFormInstance.WindowState = FormWindowState.Normal;
-                clientFormInstance.BringToFront();
             }
         }
     }

@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
-using System.Media;
-using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -190,62 +187,28 @@ namespace Synapse_Z
             }
         }
 
-
-
-        private async void ExecuteScript(string script, string pid = null)
+        private async Task ExecuteScript(string script)
         {
-            string uniqueId = Guid.NewGuid().ToString(); // Generate a unique identifier
-
-            await Task.Delay(1);
-            if (GlobalVariables.injecting == false && GlobalVariables.isDone == true)
+            using (NamedPipeClientStream pipeClient = new NamedPipeClientStream(".", "SkibidiToiletSaidAUWAndNowSkibidiToiletSad", PipeDirection.Out))
             {
                 try
                 {
-                    string schedulerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin", "scheduler");
-                    if (!Directory.Exists(schedulerPath))
-                    {
-                        Directory.CreateDirectory(schedulerPath);
-                    }
+                    await pipeClient.ConnectAsync();
 
-                    // Name the file according to the pid if provided
-                    string fileName = pid != null ? $"PID{pid}_{Guid.NewGuid().ToString()}.lua" : $"{Guid.NewGuid().ToString()}.lua";
-                    string filePath = Path.Combine(schedulerPath, fileName);
-                    using (StreamWriter writer = new StreamWriter(filePath))
-                    {
-                        await writer.WriteLineAsync(script + "@@FileFullyWritten@@");
-                    }
+                    byte[] scriptBytes = Encoding.UTF8.GetBytes(script);
+
+                    await pipeClient.WriteAsync(scriptBytes, 0, scriptBytes.Length);
+
+                    pipeClient.Close();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error writing file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"Error while executing: {ex.Message}");
                 }
-            }
-            else
-            {
-                MessageBox.Show("Not Injected!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void ExecuteForSelectedClients(string unescapedString)
-        {
-            bool anySelected = false;
-
-            foreach (var entry in GlobalVariables.ExecutionPIDS)
-            {
-                if ((bool)entry.Value)  // If the status is True
-                {
-                    anySelected = true;
-                    ExecuteScript(unescapedString, entry.Key);
-                }
-            }
-
-            if (!anySelected)
-            {
-                MessageBox.Show("No selected clients.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
-        private void Execute_Click(object sender, EventArgs e)
+        private async void Execute_Click(object sender, EventArgs e)
         {
             // Ensure there is a selected item
             if (ScriptHubBox.SelectedItem != null)
@@ -264,7 +227,14 @@ namespace Synapse_Z
                         // Read the contents of the main.lua file
                         string fileContent = File.ReadAllText(mainLuaPath);
 
-                       ExecuteForSelectedClients(fileContent);
+                        if (GlobalVariables.injected)
+                        {
+                            await ExecuteScript(fileContent);
+                        }
+                        else
+                        {
+                            MessageBox.Show("You are not injected", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
                     }
                     catch (Exception ex)
                     {

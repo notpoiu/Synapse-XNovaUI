@@ -68,7 +68,7 @@ public class ThemeManager
         }
 
         // Set the ExploitName and ShowVersion global variables
-        GlobalVariables.ExploitName = _themeSettings["ExploitName"]?.ToString() ?? "Synapse Z";
+        GlobalVariables.ExploitName = _themeSettings["ExploitName"]?.ToString() ?? "Synapse X";
         GlobalVariables.ShowVersion = _themeSettings["ShowVersion"]?.ToObject<bool>() ?? false;
     }
 
@@ -76,7 +76,7 @@ public class ThemeManager
     {
         return new JObject
         {
-            ["ExploitName"] = "Synapse Z",
+            ["ExploitName"] = "Synapse X",
             ["ShowVersion"] = true,
             ["Editor Themes"] = new JArray
             {

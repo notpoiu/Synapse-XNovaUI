@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -13,6 +14,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Windows.Shapes;
 using Manina.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
@@ -20,7 +22,9 @@ using Newtonsoft.Json.Linq;
 using Brush = System.Drawing.Brush;
 using Color = System.Drawing.Color;
 using Formatting = Newtonsoft.Json.Formatting;
+using Path = System.IO.Path;
 using Pen = System.Drawing.Pen;
+using Rectangle = System.Drawing.Rectangle;
 
 
 namespace Synapse_Z
@@ -83,22 +87,6 @@ namespace Synapse_Z
         public SynapseZ()
         {
             string currentDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            string synapseZPath = Path.Combine(currentDirectory, "Synapse-Z Boostrapper.exe");
-            string synapsePath = Path.Combine(currentDirectory, "Synapse Bootstrapper.exe");
-
-            if (File.Exists(synapseZPath) && File.Exists(synapsePath))
-            {
-                try
-                {
-                    File.Delete(synapseZPath);
-                    this.Close();
-                    Process.Start(synapsePath);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
 
             GlobalVariables.LoadSettingsAsync();
             // Initialize AutoInjectManager with a reference to this form
@@ -203,36 +191,6 @@ namespace Synapse_Z
             Scriptbox.DrawItem += Scriptbox_DrawItem;
             this.FormClosing += SynapseZ_FormClosing;
             GlobalVariables.RegisterOnTopMostGlobalChanged(UpdateTopMost);
-
-
-            CheckForUpdates();
-
-
-        }
-
-  
-        private async void CheckForUpdates()
-        {
-            string owner = "Coolmandfgfgdvcgfg"; // Replace with the repository owner's name
-            string repo = "Synapse-ZUI"; // Replace with the repository name
-
-            try
-            {
-                var latestRelease = await GetLatestRelease(owner, repo);
-                string latestVersion = latestRelease["tag_name"].ToString();
-
-                if (IsNewVersionAvailable(currentVersion, latestVersion))
-                {
-                    this.TopMost = false;
-                    MessageBox.Show("A new update is available. The application will now update.", "Update Available", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    RunBootstrapper();
-                    this.Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while checking for updates: {ex.Message}", "Update Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         private static async Task<JObject> GetLatestRelease(string owner, string repo)
@@ -258,25 +216,6 @@ namespace Synapse_Z
             string numericVersion = Regex.Replace(version, @"^[^\d]*", "");
             return new Version(numericVersion);
         }
-
-        private void RunBootstrapper()
-        {
-            string bootstrapperPath = Path.Combine(Directory.GetCurrentDirectory(), "Synapse Bootstrapper.exe");
-            if (File.Exists(bootstrapperPath))
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = bootstrapperPath,
-                    CreateNoWindow = true,
-                    UseShellExecute = false
-                });
-            }
-            else
-            {
-                MessageBox.Show("Bootstrapper not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
 
         private void UpdateTopMost(bool topMost)
         {
@@ -637,7 +576,7 @@ namespace Synapse_Z
                 if ((bool)entry.Value)  // If the status is True
                 {
                     anySelected = true;
-                    ExecuteScript(unescapedString, entry.Key);
+                    ExecuteScript(unescapedString);
                 }
             }
 
@@ -769,8 +708,6 @@ namespace Synapse_Z
 
             // Add the initial "Add Tab" button
             AddNewTabButton();
-
-            await Task.Run(ReInjectMissingPIDs);
 
             await Task.Delay(1); // why does topmost not work unless i do this wtf
             this.BringToFront();
@@ -1230,43 +1167,30 @@ namespace Synapse_Z
             }
             else
             {
-                MessageBox.Show("Please insert your Synapse Z loader into the same directory as this EXE.", "No Loader Found", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Please insert your Synapse X loader into the same directory as this EXE.", "No Loader Found", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
         }
 
-        private async void ExecuteScript(string script, string pid = null)
+        private async Task ExecuteScript(string script)
         {
-            string uniqueId = Guid.NewGuid().ToString(); // Generate a unique identifier
-
-                await Task.Delay(1);
-                if (GlobalVariables.injecting == false && GlobalVariables.isDone == true)
-                {
+            using (NamedPipeClientStream pipeClient = new NamedPipeClientStream(".", "SkibidiToiletSaidAUWAndNowSkibidiToiletSad", PipeDirection.Out))
+            {
                 try
                 {
-                    string schedulerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin", "scheduler");
-                    if (!Directory.Exists(schedulerPath))
-                    {
-                        Directory.CreateDirectory(schedulerPath);
-                    }
+                    await pipeClient.ConnectAsync();
 
-                    // Name the file according to the pid if provided
-                    string fileName = pid != null ? $"PID{pid}_{Guid.NewGuid().ToString()}.lua" : $"{Guid.NewGuid().ToString()}.lua";
-                    string filePath = Path.Combine(schedulerPath, fileName);
-                    using (StreamWriter writer = new StreamWriter(filePath))
-                    {
-                        await writer.WriteLineAsync(script + "@@FileFullyWritten@@");
-                    }
+                    byte[] scriptBytes = Encoding.UTF8.GetBytes(script);
+
+                    await pipeClient.WriteAsync(scriptBytes, 0, scriptBytes.Length);
+
+                    pipeClient.Close();
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"Error writing file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show($"Error while executing: {ex.Message}");
                 }
-                }
-                else
-                {
-                    MessageBox.Show("Not Injected!", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+            }
         }
 
         private async void Execute_Click(object sender, EventArgs e)
@@ -1291,7 +1215,16 @@ namespace Synapse_Z
                         result = result.Trim('"');
                         string unescapedString = Regex.Unescape(result);
                         // WebSocketServerManager.ExecuteScriptForUserId("243198651", unescapedString);
-                        ExecuteForSelectedClients(unescapedString);
+                        //ExecuteForSelectedClients(unescapedString);
+                        
+                        if (GlobalVariables.injected)
+                        {
+                            await ExecuteScript(unescapedString);
+                        }
+                        else
+                        {
+                            MessageBox.Show("You are not injected", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
                     }
                     else
                     {
@@ -1341,15 +1274,6 @@ namespace Synapse_Z
 
         private async void Attach_Click(object sender, EventArgs e)
         {
-            // Load existing PIDs from the PID file
-            string binDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
-            string pidFilePath = Path.Combine(binDirectory, "pid.txt");
-            List<int> existingPids = new List<int>();
-            if (File.Exists(pidFilePath))
-            {
-                existingPids = File.ReadAllLines(pidFilePath).Select(int.Parse).ToList();
-            }
-
             // Get all RobloxPlayerBeta processes
             Process[] robloxProcesses = Process.GetProcessesByName("RobloxPlayerBeta");
 
@@ -1359,31 +1283,12 @@ namespace Synapse_Z
                 return;
             }
 
-            // Filter out already injected processes
-            var processesToInject = robloxProcesses.Where(p => !existingPids.Contains(p.Id)).ToArray();
 
-            if (processesToInject.Length == 0)
-            {
-                MessageBox.Show("All instances of Roblox are already injected!", "Injection", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            // Open one instance of the launcher
-            string[] otherExePaths = GetOtherExecutablePaths();
-            if (otherExePaths != null && otherExePaths.Length > 0)
-            {
-                string launcherPath = otherExePaths.First();
-                Inject(launcherPath, false, processesToInject.Select(p => p.Id).ToArray());
-            }
+            await Inject();
         }
-        public async void Inject(string path, bool autoInject, int[] processIds)
-        {
-            if (string.IsNullOrEmpty(path) || !File.Exists(path))
-            {
-                MessageBox.Show($"The executable at '{path}' does not exist. Please check the path and try again.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
 
+        public async Task Inject()
+        {
             // Ensure bin directory exists
             string binDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
             if (!Directory.Exists(binDirectory))
@@ -1398,287 +1303,61 @@ namespace Synapse_Z
                 Directory.CreateDirectory(workspaceDirectory);
             }
 
-            // Load existing PIDs from the PID file
-            string pidFilePath = Path.Combine(binDirectory, "pid.txt");
-            List<int> existingPids = new List<int>();
-            if (File.Exists(pidFilePath))
+            // Ensure Injector exists
+            string injectorPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Injector.exe");
+            if (!File.Exists(injectorPath))
             {
-                existingPids = File.ReadAllLines(pidFilePath).Select(int.Parse).ToList();
+                MessageBox.Show("Could not find Injector.exe", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
 
-            foreach (int processId in processIds)
-            {
-                try
-                {
-                    Process robloxProcess = Process.GetProcessById(processId);
-
-                    robloxProcess.EnableRaisingEvents = true;
-                    robloxProcess.Exited += (s, e) => RemoveFromExecutionPIDS(processId); // Update this line to call RemoveFromExecutionPIDS method
-
-                    if (!existingPids.Contains(processId))
-                    {
-                        existingPids.Add(processId);
-                        File.WriteAllLines(pidFilePath, existingPids.Select(pid => pid.ToString()));
-                    }
-
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Failed to get the process: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-            }
+            GlobalVariables.injecting = true;
 
             UpdateLabelText($"{FinishedExpTop} (Checking Whitelist...)");
 
-            bool authSynExists = File.Exists(Path.Combine(binDirectory, "auth.syn"));
-            bool launchSynExists = File.Exists(Path.Combine(binDirectory, "launch.syn"));
-
-            if (authSynExists && !launchSynExists)
+            var startInfo = new ProcessStartInfo
             {
-                ClearBinFolder(binDirectory);
-                MessageBox.Show("Could not find launch.syn, did you forget to enter your HWID on the bot?", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
+                FileName = injectorPath,
+                WorkingDirectory = Path.GetDirectoryName(injectorPath),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                RedirectStandardInput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
 
-            if (!authSynExists && launchSynExists)
-            {
-                ClearBinFolder(binDirectory);
-                MessageBox.Show("Could not find auth.syn", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            // Start the background worker
-            if (!backgroundWorker.IsBusy)
-            {
-                backgroundWorker.RunWorkerAsync();
-            }
-
-            if (!authSynExists || !launchSynExists)
-            {
-                if (GlobalVariables.CurrentKey != null & GlobalVariables.CurrentKey != "")
-                {
-                    UpdateLabelText($"{FinishedExpTop} (Checking Whitelist...)");
-                    string key = GlobalVariables.CurrentKey;
-                    if (string.IsNullOrEmpty(key))
-                    {
-                        MessageBox.Show("No key entered. Aborting.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
-                    GlobalVariables.injecting = true;
-
-                    var startInfo = new ProcessStartInfo
-                    {
-                        FileName = path,
-                        WorkingDirectory = Path.GetDirectoryName(path),
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        RedirectStandardInput = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true
-                    };
-
-                    process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-                    process.Exited += (s, e) => Done(processIds);
-
-                    process.Start();
-                    ShowWindow(process.MainWindowHandle, SW_HIDE); // Hide the process window
-                    using (StreamWriter writer = process.StandardInput)
-                    {
-                        writer.WriteLine(key);
-                    }
-
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-
-                    injTimer.Start();
-                }
-                else
-                {
-                    using (var promptForm = new AccountKeyPrompt())
-                    {
-                        if (promptForm.ShowDialog(this) == DialogResult.OK)
-                        {
-                            UpdateLabelText($"{FinishedExpTop} (Checking Whitelist...)");
-                            string key = promptForm.Key;
-                            if (string.IsNullOrEmpty(key))
-                            {
-                                MessageBox.Show("No key entered. Aborting.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                                return;
-                            }
-                            GlobalVariables.injecting = true;
-
-                            var startInfo = new ProcessStartInfo
-                            {
-                                FileName = path,
-                                WorkingDirectory = Path.GetDirectoryName(path),
-                                RedirectStandardOutput = true,
-                                RedirectStandardError = true,
-                                RedirectStandardInput = true,
-                                UseShellExecute = false,
-                                CreateNoWindow = true
-                            };
-
-                            process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-                            process.Exited += (s, e) => Done(processIds);
-
-                            process.Start();
-                            ShowWindow(process.MainWindowHandle, SW_HIDE); // Hide the process window
-                            using (StreamWriter writer = process.StandardInput)
-                            {
-                                writer.WriteLine(key);
-                            }
-
-                            process.BeginOutputReadLine();
-                            process.BeginErrorReadLine();
-
-                            injTimer.Start();
-                        }
-                    }
-                }
-            }
-            else
-            {
-                ClearSchedulerFolder();
-
-                GlobalVariables.injecting = true;
-
-                if (autoInject)
-                {
-                    UpdateLabelText($"{FinishedExpTop} (Waiting for roblox...)");
-                }
-
-                foreach (int processId in processIds)
-                {
-                    bool robloxWindowShown = false;
-                    Process robloxProcess = Process.GetProcessById(processId); // Assuming you are injecting into one process at a time
-                    while (!robloxWindowShown)
-                    {
-                        robloxProcess.Refresh();
-                        if (robloxProcess.MainWindowHandle != IntPtr.Zero)
-                        {
-                            robloxWindowShown = true;
-                        }
-                        await Task.Delay(100); // Polling interval
-                    }
-                }
-
-                UpdateLabelText($"{FinishedExpTop} (Checking Whitelist...)");
-
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = path,
-                    WorkingDirectory = Path.GetDirectoryName(path),
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                process = null;
-                GlobalVariables.isDone = false;
-
-                try
-                {
-                    process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
-                    process.Exited += (s, e) => Done(processIds);
-
-                    process.Start();
-                    ShowWindow(process.MainWindowHandle, SW_HIDE); // Hide the process window
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-
-                    injTimer.Start();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error starting process: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    Done(processIds);
-                }
-            }
-        }
-
-
-        private async void Abort(int processId)
-        {
-            if (GlobalVariables.injecting == true)
-            {
-                UpdateLabelText($"{FinishedExpTop} (Injection Aborted)");
-            }
-            GlobalVariables.injecting = false;
-
-            Process[] robloxProcesses = Process.GetProcessesByName("RobloxPlayerBeta");
-            if (robloxProcesses.Length == 0)
-            {
-                GlobalVariables.isDone = false;
-            }
-
-            string binDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
-            if (!Directory.Exists(binDirectory))
-            {
-                Directory.CreateDirectory(binDirectory);
-            }
-
-            string pidFilePath = Path.Combine(binDirectory, "pid.txt");
-            List<int> pids = new List<int>();
-            if (File.Exists(pidFilePath))
-            {
-                pids = File.ReadAllLines(pidFilePath).Select(int.Parse).ToList();
-            }
-
-            // Remove the specified process ID from the list
-            pids.Remove(processId);
-
-            // Update the PID file
-            File.WriteAllLines(pidFilePath, pids.Select(pid => pid.ToString()));
-
-            // Remove the PID from ExecutionPIDS
-            RemoveFromExecutionPIDS(processId);
-
-            injTimer.Stop();
-
-            await Task.Delay(1000); // Example delay, replace with your settings.injectionDelay
-            UpdateLabelText(FinishedExpTop);
-        }
-
-
-        void ClearBinFolder(string folderPath)
-        {
             try
             {
-                string[] files = Directory.GetFiles(folderPath);
-                foreach (string file in files)
-                {
-                    File.Delete(file);
-                }
+                process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
+                process.OutputDataReceived += Process_OutputDataReceived;
+                
+                process.Start();
+                ShowWindow(process.MainWindowHandle, SW_HIDE); // Hide the process window
+                
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+
+                injTimer.Start();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Error", $"Could not clear the bin folder: {ex.Message}", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error starting process: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                GlobalVariables.injecting = false;
+                UpdateLabelText($"{FinishedExpTop} (Failed to inject...)");
+                await Task.Delay(1000);
+                UpdateLabelText(FinishedExpTop);
             }
         }
 
-        private void ClearSchedulerFolder()
+        private void Process_OutputDataReceived(object sender, DataReceivedEventArgs e)
         {
-            string schedulerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin", "scheduler");
-            if (Directory.Exists(schedulerPath))
+            if (e.Data != null && e.Data.Contains("Injected."))
             {
-                try
-                {
-                    DirectoryInfo directoryInfo = new DirectoryInfo(schedulerPath);
-                    foreach (FileInfo file in directoryInfo.GetFiles())
-                    {
-                        file.Delete();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"Error clearing scheduler folder: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+                Done();
             }
         }
 
-        private async void Done(int[] processIds)
+        public async void Done()
         {
             if (GlobalVariables.isDone) return;
             if (!GlobalVariables.injecting) return;
@@ -1709,45 +1388,9 @@ namespace Synapse_Z
                 backgroundWorker.CancelAsync();
             }
 
-            bool launchSynExists = File.Exists(Path.Combine(binDirectory, "launch.syn"));
-            if (!launchSynExists)
-            {
-                ClearBinFolder(binDirectory);
-                MessageBox.Show("Could not find launch.syn, did you forget to enter your HWID on the bot?", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                UpdateLabelText($"{FinishedExpTop} (Injection Aborted)");
-                foreach (int processId in processIds)
-                {
-                    Abort(processId);
-                }
-                return;
-            }
-
-            foreach (int processId in processIds)
-            {
-                // Add a timer to verify the process completion status
-                var verificationTimer = new System.Windows.Forms.Timer();
-                verificationTimer.Interval = 5000; // Set to 5 seconds or adjust as needed
-                verificationTimer.Tick += (s, e) =>
-                {
-                    Process[] robloxProcesses = Process.GetProcessesByName("RobloxPlayerBeta");
-                    if (robloxProcesses.All(p => p.Id != processId))
-                    {
-                        UpdateLabelText($"{FinishedExpTop} (Process Crashed)");
-                        verificationTimer.Stop();
-                        Abort(processId);
-                    }
-                    else
-                    {
-                        UpdateLabelText($"{FinishedExpTop}");
-                        verificationTimer.Stop();
-                    }
-                };
-                verificationTimer.Start();
-
-                AddToExecutionPIDS(processId);
-            }
-
             UpdateLabelText($"{FinishedExpTop} (Ready!)");
+
+            GlobalVariables.injected = true;
 
             if (GlobalVariables.UnlockFPS)
             {
@@ -1755,26 +1398,14 @@ namespace Synapse_Z
                 {
                     if ((bool)entry.Value)  // If the status is True
                     {
-                        ExecuteScript("setfflag('DFIntTaskSchedulerTargetFps', 999999)", entry.Key);
+                        ExecuteScript("setfflag('DFIntTaskSchedulerTargetFps', 999999)");
                     }
                 }
-            }
-
-            Process[] robloxProcesses = Process.GetProcessesByName("RobloxPlayerBeta");
-            if (robloxProcesses.Length == 0)
-            {
-                foreach (int processId in processIds)
-                {
-                    Abort(processId);
-                }
-                return;
             }
 
             await Task.Delay(1000);
 
             UpdateLabelText(FinishedExpTop);
-
-         
         }
 
 
@@ -1982,133 +1613,6 @@ namespace Synapse_Z
                     MessageBox.Show("No active web view found to set the text.");
                 }
             }
-        }
-
-        private void AddToExecutionPIDS(int processId)
-        {
-            if (!GlobalVariables.ExecutionPIDS.ContainsKey(processId.ToString()))
-            {
-                bool anySelected = GlobalVariables.ExecutionPIDS.Values.Any(value => (bool)value);
-                GlobalVariables.ExecutionPIDS[processId.ToString()] = !anySelected;
-            }
-        }
-
-        private void RemoveFromExecutionPIDS(int processId)
-        {
-            if (GlobalVariables.ExecutionPIDS.ContainsKey(processId.ToString()))
-            {
-                GlobalVariables.ExecutionPIDS.Remove(processId.ToString());
-            }
-        }
-
-        private async Task ReInjectMissingPIDs()
-        {
-            string binDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bin");
-            string pidFilePath = Path.Combine(binDirectory, "pid.txt");
-
-            if (File.Exists(pidFilePath))
-            {
-                var existingPids = File.ReadAllLines(pidFilePath)
-                                        .Where(line => int.TryParse(line, out _))
-                                        .Select(int.Parse)
-                                        .ToList();
-
-                // Get all RobloxPlayerBeta processes
-                Process[] robloxProcesses = Process.GetProcessesByName("RobloxPlayerBeta");
-
-                // Filter out already injected processes
-                var processesToInject = robloxProcesses.Where(p => !GlobalVariables.ExecutionPIDS.ContainsKey(p.Id.ToString())).ToArray();
-
-                if (processesToInject.Length == 0)
-                {
-                    // No processes to inject, clean up PIDs that are no longer running
-                    CleanUpInvalidPIDs(existingPids, pidFilePath);
-                    return;
-                }
-
-                // To avoid modifying the collection while enumerating, use a temporary list
-                List<int> pidsToRemove = new List<int>();
-
-                foreach (var pid in existingPids)
-                {
-                    try
-                    {
-                        Process reinjectProcess = Process.GetProcessById(pid);
-
-                        // Check if the process is still running
-                        if (!reinjectProcess.HasExited)
-                        {
-                            if (!GlobalVariables.ExecutionPIDS.ContainsKey(pid.ToString()))
-                            {
-                                GlobalVariables.injecting = true;
-
-                                // Update synlabel text
-                                UpdateLabelText($"{FinishedExpTop} (Re-Injecting...)");
-
-                                // Add to ExecutionPIDS and attach close event for abort
-                                AddToExecutionPIDS(pid);
-                                reinjectProcess.EnableRaisingEvents = true;
-                                reinjectProcess.Exited += (s, e) => Abort(pid);
-
-                                GlobalVariables.injecting = false;
-                                GlobalVariables.isDone = true;
-
-                                await Task.Delay(100); // Add a slight delay
-
-                                UpdateLabelText($"{FinishedExpTop} (Ready!)");
-                                await Task.Delay(1000); // Add a slight delay
-
-                                UpdateLabelText($"{FinishedExpTop}");
-                            }
-                        }
-                        else
-                        {
-                            // Process has exited, add to the list of PIDs to remove
-                            pidsToRemove.Add(pid);
-                        }
-                    }
-                    catch (ArgumentException)
-                    {
-                        // Process not found, add to the list of PIDs to remove
-                        pidsToRemove.Add(pid);
-                    }
-                }
-
-                // Remove invalid PIDs after enumeration
-                foreach (var pid in pidsToRemove)
-                {
-                    existingPids.Remove(pid);
-                }
-
-                // Update the PID file to remove invalid PIDs
-                File.WriteAllLines(pidFilePath, existingPids.Select(pid => pid.ToString()));
-            }
-            else
-            {
-                // PID file does not exist
-                Console.WriteLine("PID file does not exist");
-            }
-        }
-
-        private void CleanUpInvalidPIDs(List<int> existingPids, string pidFilePath)
-        {
-            List<int> validPids = new List<int>();
-
-            foreach (var pid in existingPids)
-            {
-                try
-                {
-                    Process.GetProcessById(pid);
-                    validPids.Add(pid);
-                }
-                catch (ArgumentException)
-                {
-                    // Process not found, do not add to validPids
-                }
-            }
-
-            // Update the PID file to only include valid PIDs
-            File.WriteAllLines(pidFilePath, validPids.Select(pid => pid.ToString()));
         }
     }
     public static class ByteExtensions
